@@ -1,7 +1,7 @@
 ## Запускаем все по порядку
 ```shell
 # Даем права на выполнение
-chmod +x init-cluster.sh
+chmod +x init-cluster.sh mongo-init.sh
 
 # 1. Запускаем 
 ./init-cluster.sh
