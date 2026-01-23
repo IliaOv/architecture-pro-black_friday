@@ -1,0 +1,235 @@
+name: sharding-repl-cache
+
+services:
+  # Config Server (репликасет из 3 нод)
+  config1:
+    image: mongo:latest
+    container_name: config1
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    networks:
+      mongo-network:
+        aliases:
+          - configSrv
+    volumes:
+      - config1-data:/data/db
+    command: >
+      --configsvr
+      --replSet configrs
+      --bind_ip_all
+      --port 27017
+
+  config2:
+    image: mongo:latest
+    container_name: config2
+    restart: unless-stopped
+    ports:
+      - "27027:27017"
+    networks:
+      mongo-network:
+        aliases:
+          - configSrv
+    volumes:
+      - config2-data:/data/db
+    command: >
+      --configsvr
+      --replSet configrs
+      --bind_ip_all
+      --port 27017
+
+  config3:
+    image: mongo:latest
+    container_name: config3
+    restart: unless-stopped
+    ports:
+      - "27037:27017"
+    networks:
+      mongo-network:
+        aliases:
+          - configSrv
+    volumes:
+      - config3-data:/data/db
+    command: >
+      --configsvr
+      --replSet configrs
+      --bind_ip_all
+      --port 27017
+
+  # Shard 1 - 3 реплики
+  shard1-primary:
+    image: mongo:latest
+    container_name: shard1-primary
+    restart: unless-stopped
+    ports:
+      - "27018:27018"
+    networks:
+      mongo-network:
+        aliases:
+          - shard1
+    volumes:
+      - shard1-primary-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard1rs
+      --bind_ip_all
+      --port 27018
+
+  shard1-secondary1:
+    image: mongo:latest
+    container_name: shard1-secondary1
+    restart: unless-stopped
+    ports:
+      - "27028:27018"
+    networks:
+      mongo-network:
+        aliases:
+          - shard1
+    volumes:
+      - shard1-secondary1-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard1rs
+      --bind_ip_all
+      --port 27018
+
+  shard1-secondary2:
+    image: mongo:latest
+    container_name: shard1-secondary2
+    restart: unless-stopped
+    ports:
+      - "27038:27018"
+    networks:
+      mongo-network:
+        aliases:
+          - shard1
+    volumes:
+      - shard1-secondary2-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard1rs
+      --bind_ip_all
+      --port 27018
+
+  # Shard 2 - 3 реплики
+  shard2-primary:
+    image: mongo:latest
+    container_name: shard2-primary
+    restart: unless-stopped
+    ports:
+      - "27019:27019"
+    networks:
+      mongo-network:
+        aliases:
+          - shard2
+    volumes:
+      - shard2-primary-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard2rs
+      --bind_ip_all
+      --port 27019
+
+  shard2-secondary1:
+    image: mongo:latest
+    container_name: shard2-secondary1
+    restart: unless-stopped
+    ports:
+      - "27029:27019"
+    networks:
+      mongo-network:
+        aliases:
+          - shard2
+    volumes:
+      - shard2-secondary1-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard2rs
+      --bind_ip_all
+      --port 27019
+
+  shard2-secondary2:
+    image: mongo:latest
+    container_name: shard2-secondary2
+    restart: unless-stopped
+    ports:
+      - "27039:27019"
+    networks:
+      mongo-network:
+        aliases:
+          - shard2
+    volumes:
+      - shard2-secondary2-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard2rs
+      --bind_ip_all
+      --port 27019
+
+  # Mongos Router (ЗАПУСКАТЬ ПОСЛЕ ИНИЦИАЛИЗАЦИИ)
+  mongos_router:
+    image: mongo:latest
+    container_name: mongos_router
+    restart: unless-stopped
+    ports:
+      - "27020:27020"
+    networks:
+      mongo-network:
+        aliases:
+          - mongos
+    command: >
+      mongos
+      --configdb configrs/config1:27017,config2:27017,config3:27017
+      --bind_ip_all
+      --port 27020
+
+  # Redis Cache
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379"
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+    networks:
+      mongo-network:
+        aliases:
+          - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      start_period: 10s
+  
+  # API Application
+  pymongo_api:
+    container_name: pymongo_api
+    build: 
+      context: api_app
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    networks:
+      - mongo-network
+    environment:
+      MONGODB_URL: "mongodb://mongos_router:27020"
+      MONGODB_DATABASE_NAME: "somedb"
+      REDIS_URL: "redis://redis:6379"
+
+networks:
+  mongo-network:
+    driver: bridge
+
+volumes:
+  redis_data: {}
+  config1-data:
+  config2-data:
+  config3-data:
+  shard1-primary-data:
+  shard1-secondary1-data:
+  shard1-secondary2-data:
+  shard2-primary-data:
+  shard2-secondary1-data:
+  shard2-secondary2-data:

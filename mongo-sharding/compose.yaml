@@ -1,0 +1,98 @@
+name: mongo-sharding
+
+services:
+
+  # сервер конфигурации
+  configSrv:
+    image: mongo:latest
+    container_name: configSrv
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    networks:
+      - mongo-network
+    volumes:
+      - config-data:/data/db
+    command: >
+      --configsvr
+      --replSet config_server
+      --bind_ip_all
+      --port 27017
+
+  # 1-й шард
+  shard1:
+    image: mongo:latest
+    container_name: shard1
+    restart: unless-stopped
+    ports:
+      - "27018:27018"
+    networks:
+      - mongo-network
+    volumes:
+      - shard1-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard1
+      --bind_ip_all
+      --port 27018
+
+  # 2-й шард
+  shard2:
+    image: mongo:latest
+    container_name: shard2
+    restart: unless-stopped
+    ports:
+      - "27019:27019"
+    networks:
+      - mongo-network
+    volumes:
+      - shard2-data:/data/db
+    command: >
+      --shardsvr
+      --replSet shard2
+      --bind_ip_all
+      --port 27019
+
+  # роутер (mongos_router)
+  mongos_router:
+    image: mongo:latest
+    container_name: mongos_router
+    restart: unless-stopped
+    ports:
+      - "27020:27020"
+    networks:
+      - mongo-network
+    command: >
+      mongos
+      --configdb config_server/configSrv:27017
+      --bind_ip_all
+      --port 27020
+    depends_on:
+      - configSrv
+      - shard1
+      - shard2
+  
+  # API Application
+  pymongo_api:
+    container_name: pymongo_api
+    build: 
+      context: api_app
+      dockerfile: Dockerfile
+    depends_on:
+      - mongos_router
+    ports:
+      - 8080:8080
+    networks:
+      - mongo-network
+    environment:
+      MONGODB_URL: "mongodb://mongos_router:27020"
+      MONGODB_DATABASE_NAME: "somedb"
+
+networks:
+  mongo-network:
+    driver: bridge
+
+volumes:
+  config-data:
+  shard1-data:
+  shard2-data:
